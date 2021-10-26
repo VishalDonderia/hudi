@@ -289,6 +289,10 @@
       <id>confluent</id>
       <url>https://packages.confluent.io/maven/</url>
     </repository>
+    <repository>
+      <id>spring-libs</id>
+      <url>http://repo.spring.io/libs-milestone/</url>
+    </repository>
   </repositories>
 
   <dependencies>
