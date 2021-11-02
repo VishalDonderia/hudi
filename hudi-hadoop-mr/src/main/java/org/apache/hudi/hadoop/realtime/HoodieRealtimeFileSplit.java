@@ -44,6 +44,14 @@ public class HoodieRealtimeFileSplit extends FileSplit implements RealtimeSplit 
     super();
   }
 
+  public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime)
+          throws IOException {
+    super(baseSplit.getPath(), baseSplit.getStart(), baseSplit.getLength(), baseSplit.getLocations());
+    this.deltaLogPaths = deltaLogPaths;
+    this.maxCommitTime = maxCommitTime;
+    this.basePath = basePath;
+  }
+
   public HoodieRealtimeFileSplit(FileSplit baseSplit, String basePath, List<String> deltaLogPaths, String maxCommitTime,
                                  Option<HoodieVirtualKeyInfo> hoodieVirtualKeyInfo)
       throws IOException {
