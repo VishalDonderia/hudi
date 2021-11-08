@@ -54,7 +54,7 @@ public class HoodieMemoryConfig extends DefaultHoodieConfig {
   public static final int DEFAULT_MAX_DFS_STREAM_BUFFER_SIZE = 16 * 1024 * 1024; // 16MB
   public static final String SPILLABLE_MAP_BASE_PATH_PROP = "hoodie.memory.spillable.map.path";
   // Default file path prefix for spillable file
-  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/tmp/";
+  public static final String DEFAULT_SPILLABLE_MAP_BASE_PATH = "/data/sparklocal";
 
   // Property to control how what fraction of the failed record, exceptions we report back to driver.
   public static final String WRITESTATUS_FAILURE_FRACTION_PROP = "hoodie.memory.writestatus.failure.fraction";
