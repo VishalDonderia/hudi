@@ -79,7 +79,7 @@ public class HoodieMemoryConfig extends HoodieConfig {
 
   public static final ConfigProperty<String> SPILLABLE_MAP_BASE_PATH = ConfigProperty
       .key("hoodie.memory.spillable.map.path")
-      .defaultValue("/tmp/")
+      .defaultValue("/data/sparklocal")
       .withDocumentation("Default file path prefix for spillable map");
 
   public static final ConfigProperty<Double> WRITESTATUS_FAILURE_FRACTION = ConfigProperty
