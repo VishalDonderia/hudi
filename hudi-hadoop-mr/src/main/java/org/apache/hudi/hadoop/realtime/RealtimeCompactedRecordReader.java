@@ -28,6 +28,7 @@ import org.apache.hudi.hadoop.config.HoodieRealtimeConfig;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -38,6 +39,8 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Map;
 
 class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
@@ -95,10 +98,12 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
         // TODO(NA): Invoke preCombine here by converting arrayWritable to Avro. This is required since the
         // deltaRecord may not be a full record and needs values of columns from the parquet
         Option<GenericRecord> rec;
+        String jsonString = arrayWritableToString(arrayWritable,getHiveSchema());
+        GenericRecord baseParquetGenericRecord = HoodieAvroUtils.jsonBytesToAvro(jsonString.getBytes(StandardCharsets.UTF_8), getHiveSchema());
         if (usesCustomPayload) {
-          rec = deltaRecordMap.get(key).getData().getInsertValue(getWriterSchema());
+          rec = deltaRecordMap.get(key).getData().combineAndGetUpdateValue(baseParquetGenericRecord,getWriterSchema());
         } else {
-          rec = deltaRecordMap.get(key).getData().getInsertValue(getReaderSchema());
+          rec = deltaRecordMap.get(key).getData().combineAndGetUpdateValue(baseParquetGenericRecord,getReaderSchema());
         }
         if (!rec.isPresent()) {
           // If the record is not present, this is a delete record using an empty payload so skip this base record
@@ -138,6 +143,92 @@ class RealtimeCompactedRecordReader extends AbstractRealtimeRecordReader
       }
     }
     return true;
+  }
+
+  /**
+   * Get a JSON representation of the ArrayWritable.
+   */
+  public static String arrayWritableToString(ArrayWritable writable, Schema schema) {
+    if (writable == null) {
+      return "null";
+    }
+    StringBuilder builder = new StringBuilder();
+    Writable[] values = writable.get();
+    builder.append("{");
+    if (schema.getType().equals(Schema.Type.MAP)) {
+      schema = schema.getValueType();
+      for (Writable w : values) {
+        if (w == null) {
+          builder.append(handleNullValue(schema));
+        } else if (((ArrayWritable)w).get()[1] instanceof ArrayWritable) {
+          builder.append("\"").append(((ArrayWritable) w).get()[0]).append("\":").append(arrayWritableToString((ArrayWritable) ((ArrayWritable) w).get()[1], schema)).append(",");
+        } else {
+          builder.append("\"").append(((ArrayWritable) w).get()[0]).append("\":").append(getValueString(schema,((ArrayWritable) w).get()[1]));
+        }
+      }
+    } else if (schema.getType().equals(Schema.Type.RECORD)) {
+      int fieldIndex = 0;
+      List<Schema.Field> fields = schema.getFields();
+      for (Writable w : values) {
+        Schema.Field name = fields.get(fieldIndex++);
+        builder.append("\"").append(name.name()).append("\":");
+        if (w == null) {
+          builder.append(handleNullValue(name.schema()));
+        } else if (w instanceof ArrayWritable) {
+          builder.append(arrayWritableToString((ArrayWritable) w, name.schema())).append(",");
+        } else {
+          builder.append(getValueString(name.schema(), w));
+        }
+      }
+    } else {
+      Schema type = schema.getTypes().get(0);
+      if (type.getType().equals(Schema.Type.MAP)) {
+        builder.append("\"map\":");
+      }
+      builder.append(arrayWritableToString(writable,type)).append(",");
+    }
+    if (builder.length() > 1) {
+      builder.deleteCharAt(builder.length() - 1);
+    }
+    builder.append("}");
+    return builder.toString();
+  }
+
+  /**
+   * get value string.
+   */
+  public static String getValueString(Schema schema, Writable w) {
+    StringBuilder builder = new StringBuilder();
+    Schema type = schema.getTypes().get(0);
+    if (schema.getTypes().get(0).getType().equals(Schema.Type.NULL)) {
+      type = schema.getTypes().get(1);
+    }
+    String appendValueString;
+    switch (type.getType()) {
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BOOLEAN:
+        appendValueString = w.toString();
+        break;
+      default:
+        appendValueString = "\"" + w + "\"";
+    }
+    builder.append("{\"").append(type.getName()).append("\":").append(appendValueString).append("}").append(",");
+    return builder.toString();
+  }
+
+  public static String handleNullValue(Schema schema) {
+    StringBuilder builder = new StringBuilder();
+    if (schema.getType().equals(Schema.Type.MAP)) {
+      builder.append("{}").append(",");
+    } else if (schema.getType().equals(Schema.Type.UNION) && schema.getTypes().get(0).getType().equals(Schema.Type.MAP)) {
+      builder.append("{\"map\":{}}").append(",");
+    } else {
+      builder.append("null").append(",");
+    }
+    return builder.toString();
   }
 
   @Override
